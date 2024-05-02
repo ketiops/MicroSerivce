@@ -1,0 +1,31 @@
+ apiVersion: apps/v1
+ kind: Deployment
+ metadata:
+   name: microservice-age-limit
+   namespace: microservice
+ spec:
+   replicas: 1
+   selector:
+     matchLabels:
+       run: microservice-age-limit
+   template:
+     metadata:
+       labels:
+         run: microservice-age-limit
+     spec:
+       imagePullSecrets:
+         - name: regcred
+       containers:
+         - name: microservice-age-limit
+           image: docker.io/library/ubuntu:20.04
+           command:
+             - sleep
+             - "3600" 
+           resources:
+             limits:
+               memory: "100Mi"
+             requests:
+               memory: "100Mi"
+           ports:
+             - containerPort: 9010
+               protocol: TCP
