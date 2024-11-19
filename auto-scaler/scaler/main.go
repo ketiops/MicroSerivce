@@ -148,13 +148,84 @@ func cpuLimitScaleOut() {
 		}
 	}
 }
+func rpsScaleOut(){
+	defer Wait_goFunc.Done()
+
+	var deploymentName string
+	var hpaCount string
+	fmt.Println("[" + time.Now().Format("2006-01-02 15:04:05") + "] " + "RPS Scale-Out 조건이 설정되었습니다.\n")
+	var rpsFlag bool = false
+
+	for !rpsFlag{
+		
+		CountCmd := exec.Command("bash", "-c", "kubectl get pods -n hpa | grep rps | wc -l")
+		output_CountCmd, err := CountCmd.Output()
+		if err != nil {
+			fmt.Println(err)
+		}
+		str_Count := string(output_CountCmd)
+		hpaCount = str_Count
+		hpaCount = strings.ReplaceAll(hpaCount, "\n", "")
+		int_Count, err := strconv.Atoi(hpaCount)
+
+		if int(int_Count) >= 2 {
+			// HPA AutoScaleOut Success
+			cmd_checkDeployment := exec.Command("bash", "-c", "kubectl get deploy -n hpa | grep rps | awk '{print $1}' | head -1")
+				output_deploymentName, err := cmd_checkDeployment.Output()
+				if err != nil {
+					fmt.Println(err)
+				}
+			str_deploymentName := string(output_deploymentName)
+			deploymentName = str_deploymentName
+			deploymentName = strings.ReplaceAll(deploymentName, "\n", "")
+			fmt.Println("[" + time.Now().Format("2006-01-02 15:04:05") + "] " + deploymentName + "의 동작이 감지되었습니다.\n")
+			time.Sleep(time.Second * 1)
+			hpaWtachCmd := exec.Command("bash", "-c", "kubectl get hpa --namespace hpa")
+
+				// fmt.Println("ok")
+			stdin, err := hpaWtachCmd.StdinPipe()
+			if err != nil {
+				log.Panic(err)
+			}
+			go func() {
+				defer stdin.Close()
+				_, _ = io.WriteString(stdin, "values written to stdin are passed to cmd's standard input")
+			}()
+			out, err := hpaWtachCmd.CombinedOutput()
+			if err != nil {
+				fmt.Println("error", err)
+			}
+			fmt.Println("\n" + string(out))
+
+			hpaDeleteCmd := exec.Command("bash", "-c", "kubectl delete hpa microservice-rps -n hpa")
+			_, err = hpaDeleteCmd.Output()
+			if err != nil {
+					fmt.Println(err)
+			}
+
+			fmt.Println("[" + time.Now().Format("2006-01-02 15:04:05") + "] " + deploymentName + "이 정상적으로 Scale-Out 되었습니다.\n")
+
+			time.Sleep(time.Second * 10)
+			podDeleteCmd := exec.Command("bash", "-c", "kubectl scale deployment microservice-rps -n hpa --replicas 1")
+			_, err = podDeleteCmd.Output()
+			if err != nil {
+					fmt.Println(err)
+			}
+			rpsFlag = true	
+		}else{
+			continue
+		}
+	}
+
+}
 
 func main() {
 
-	Wait_goFunc.Add(1)
+	Wait_goFunc.Add(3)
 
 	go ageLimitScaleOut()
 	go cpuLimitScaleOut()
+	go rpsScaleOut()
 
 	Wait_goFunc.Wait()
 }
