@@ -1,0 +1,26 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  labels:
+    app: travels
+  name: rps-hpa
+  namespace: hpa
+spec:
+  maxReplicas: 5
+  metrics:
+    - object:
+        describedObject:
+          apiVersion: v1
+          kind: Service
+          name: rps
+        metric:
+          name: requests_per_second
+        target:
+          type: Value
+          value: 10
+      type: Object
+  minReplicas: 1
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: microservice-rps
