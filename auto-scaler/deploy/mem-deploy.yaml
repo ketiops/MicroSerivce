@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: microservice-mem
+  namespace: hpa
+spec:
+  selector:
+    matchLabels:
+      app: microservice-mem
+  template:
+    metadata:
+      labels:
+        app: microservice-mem
+        scailing-target: "true"
+    spec:
+      nodeName: ketiops-gpu-node-4
+      containers:
+      - name: microservice-mem
+        image: gwangyong/rs-test:0.0.1
+        resources:
+          requests:
+            memory: "128Mi"
+          limits:
+            memory: "256Mi"
