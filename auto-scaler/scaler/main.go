@@ -218,14 +218,106 @@ func rpsScaleOut(){
 	}
 
 }
+// Memory Usage based on HPA Auto ScaleOut Test Function
+func memScaleOut(){
+	defer Wait_goFunc.Done()
+	var deploymentName string
+	var hpaCount string
+
+	fmt.Println("[" + time.Now().Format("2006-01-02 15:04:05") + "] " + "Memory Usage Scale-Out 조건이 설정되었습니다.\n")
+
+	var memFlag bool = false
+
+	for !memFlag{
+		
+		// namespace가 hpa로 설정된 파드 중 mem 문자열이 포함된 라인 수를 카운팅 후 반환하는 명령어
+		// 즉, Pod name에 mem이 포함된 Pod의 개수를 반환
+		// Default: 1, ScaleOut이 적용된 경우: 2 ~ n
+		CountCmd := exec.Command("bash", "-c", "kubectl get pods -n hpa | grep mem | wc -l") 
+		output_CountCmd, err := CountCmd.Output()
+		if err != nil {
+			fmt.Println(err)
+		}
+		// String to integer
+		str_Count := string(output_CountCmd)
+		hpaCount = str_Count
+		hpaCount = strings.ReplaceAll(hpaCount, "\n", "")
+		int_Count, err := strconv.Atoi(hpaCount)
+
+		// ScaleOut이 수행되어 Pod가 생성된 경우 수행되는 if문
+		if int(int_Count) >= 2 {
+			// HPA AutoScaleOut Success
+			// hpa 네임스페이스 내의 mem이 포함된 파드의 정보 중 가장 앞의 Pod Name부분만 가져오는 명령어
+			cmd_checkDeployment := exec.Command("bash", "-c", "kubectl get deploy -n hpa | grep mem | awk '{print $1}' | head -1")
+				output_deploymentName, err := cmd_checkDeployment.Output()
+				if err != nil {
+					fmt.Println(err)
+				}
+			// 가져온 Pod Name을 Golang에서 사용하기 쉽도록 가공
+			str_deploymentName := string(output_deploymentName)
+			deploymentName = str_deploymentName
+			deploymentName = strings.ReplaceAll(deploymentName, "\n", "")
+
+			// ScaleOut 결과 Print
+			fmt.Println("[" + time.Now().Format("2006-01-02 15:04:05") + "] " + deploymentName + "의 동작이 감지되었습니다.\n")
+			time.Sleep(time.Second * 1)
+
+			// 현재 HPA Status 출력을 위한 커멘드
+			hpaWtachCmd := exec.Command("bash", "-c", "kubectl get hpa --namespace hpa")
+			// hpaWtachCmd의 표준 입력을 위한 파이프를 생성합니다.
+			stdin, err := hpaWtachCmd.StdinPipe()
+			if err != nil {
+				log.Panic(err) // 오류가 발생하면 프로그램을 중단하고 오류 메시지를 출력합니다.
+			}
+
+			// goroutine을 생성하여 stdin에 데이터를 씁니다.
+			go func() {
+				defer stdin.Close() // 함수 종료 시 stdin을 닫아 명령어에 입력이 완료되었음을 알립니다.
+				_, _ = io.WriteString(stdin, "values written to stdin are passed to cmd's standard input") // stdin에 문자열을 씁니다. 실제로 이 줄은 이 명령어에서는 의미가 없습니다.
+			}()
+
+			// 명령어를 실행하고 표준 출력 및 표준 에러 출력을 함께 가져옵니다.
+			out, err := hpaWtachCmd.CombinedOutput()
+			if err != nil {
+				// 명령어 실행 중 오류가 발생한 경우 오류 메시지를 출력합니다.
+				fmt.Println("error", err)
+			}else{
+				// 명령어의 출력 결과를 문자열로 변환하여 출력합니다.
+				fmt.Println("\n" + string(out))
+			}
+
+			// ScaleOut이 완료된 HPA를 제거하기 위한 커멘드
+			hpaDeleteCmd := exec.Command("bash", "-c", "kubectl delete hpa microservice-mem -n hpa")
+			_, err = hpaDeleteCmd.Output()
+			if err != nil {
+					fmt.Println(err)
+			}
+
+			fmt.Println("[" + time.Now().Format("2006-01-02 15:04:05") + "] " + deploymentName + "이 정상적으로 Scale-Out 되었습니다.\n")
+
+			time.Sleep(time.Second * 10)
+			podDeleteCmd := exec.Command("bash", "-c", "kubectl scale deployment microservice-mem -n hpa --replicas 1")
+			_, err = podDeleteCmd.Output()
+			if err != nil {
+					fmt.Println(err)
+			}
+			
+			// 무의미한 Loop를 막기위한 Flag 설정
+			memFlag = true
+		}else{
+			continue
+		}
+	}
+}
 
 func main() {
 
-	Wait_goFunc.Add(3)
+	Wait_goFunc.Add(4)
 
 	go ageLimitScaleOut()
 	go cpuLimitScaleOut()
 	go rpsScaleOut()
+	go memScaleOut()
 
 	Wait_goFunc.Wait()
 }
